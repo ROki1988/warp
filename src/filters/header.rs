@@ -6,53 +6,12 @@
 //! a type from any header.
 use std::str::FromStr;
 
+use http::HeaderMap;
 use http::header::{HeaderName, HeaderValue};
 
 use ::never::Never;
 use ::filter::{Filter, filter_fn, filter_fn_one, One};
 use ::reject::{self, Rejection};
-
-pub(crate) fn if_value<F>(name: &'static HeaderName, func: F)
-    -> impl Filter<Extract=(), Error=Rejection> + Copy
-where
-    F: Fn(&HeaderValue) -> Option<()> + Copy,
-{
-    filter_fn(move |route| {
-        route.headers()
-            .get(name)
-            .and_then(func)
-            .map(Ok)
-            .unwrap_or_else(|| Err(reject::bad_request()))
-    })
-}
-
-pub(crate) fn value<F, U>(name: &'static HeaderName, func: F)
-    -> impl Filter<Extract=One<U>, Error=Rejection> + Copy
-where
-    F: Fn(&HeaderValue) -> Option<U> + Copy,
-    U: Send,
-{
-    filter_fn_one(move |route| {
-        route.headers()
-            .get(name)
-            .and_then(func)
-            .map(Ok)
-            .unwrap_or_else(|| Err(reject::bad_request()))
-    })
-}
-
-pub(crate) fn optional_value<F, U>(name: &'static HeaderName, func: F)
-    -> impl Filter<Extract=One<Option<U>>, Error=Never> + Copy
-where
-    F: Fn(&HeaderValue) -> Option<U> + Copy,
-    U: Send,
-{
-    filter_fn_one(move |route| {
-        Ok::<_, Never>(route.headers()
-            .get(name)
-            .and_then(func))
-    })
-}
 
 /// Create a `Filter` that tries to parse the specified header.
 ///
@@ -144,6 +103,66 @@ pub fn exact_ignore_case(name: &'static str, value: &'static str) -> impl Filter
                 }
             })
             .unwrap_or_else(|| Err(reject::bad_request()))
+    })
+}
+
+/// Create a `Filter` that returns a clone of the request's `HeaderMap`.
+///
+/// # Example
+///
+/// ```
+/// use warp::{Filter, http::HeaderMap};
+///
+/// let headers = warp::header::headers_cloned()
+///     .map(|headers: HeaderMap| {
+///         format!("header count: {}", headers.len())
+///     });
+/// ```
+pub fn headers_cloned() -> impl Filter<Extract=One<HeaderMap>, Error=Never> + Copy {
+    filter_fn_one(|route| {
+        Ok(route.headers().clone())
+    })
+}
+
+pub(crate) fn if_value<F>(name: &'static HeaderName, func: F)
+    -> impl Filter<Extract=(), Error=Rejection> + Copy
+where
+    F: Fn(&HeaderValue) -> Option<()> + Copy,
+{
+    filter_fn(move |route| {
+        route.headers()
+            .get(name)
+            .and_then(func)
+            .map(Ok)
+            .unwrap_or_else(|| Err(reject::bad_request()))
+    })
+}
+
+pub(crate) fn value<F, U>(name: &'static HeaderName, func: F)
+    -> impl Filter<Extract=One<U>, Error=Rejection> + Copy
+where
+    F: Fn(&HeaderValue) -> Option<U> + Copy,
+    U: Send,
+{
+    filter_fn_one(move |route| {
+        route.headers()
+            .get(name)
+            .and_then(func)
+            .map(Ok)
+            .unwrap_or_else(|| Err(reject::bad_request()))
+    })
+}
+
+pub(crate) fn optional_value<F, U>(name: &'static HeaderName, func: F)
+    -> impl Filter<Extract=One<Option<U>>, Error=Never> + Copy
+where
+    F: Fn(&HeaderValue) -> Option<U> + Copy,
+    U: Send,
+{
+    filter_fn_one(move |route| {
+        Ok::<_, Never>(route.headers()
+            .get(name)
+            .and_then(func))
     })
 }
 
